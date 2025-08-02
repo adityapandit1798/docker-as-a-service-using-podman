@@ -1,11 +1,16 @@
 # app.py - Docker as a Service (DaaS) - With Debugging & Fixed Volume/Network Selection
 from flask import Flask, render_template, request, redirect, url_for, Response
 import json
+import os
+import subprocess
 import requests
 import logging
 from datetime import datetime
 import yaml
 import re
+from flask import request
+from werkzeug.utils import secure_filename
+import tempfile
 
 
 # 🔧 Setup logging
@@ -540,6 +545,68 @@ def format_timestamp(ts):
     """Convert Unix timestamp to readable format"""
     dt = datetime.fromtimestamp(ts / 1000)  # Podman uses milliseconds
     return dt.strftime("%Y-%m-%d %H:%M:%S")
+
+#file upload route
+def scp_to_fc(target_path, local_path):
+    """Copy file from jump server to FCOS"""
+    try:
+        result = subprocess.run([
+            "scp", 
+            "-i", "/home/innuser004/.ssh/id_coreos",  # Update path to your key
+            local_path, 
+            f"core@192.168.192.155:{target_path}"
+        ], capture_output=True, text=True, timeout=30)
+        if result.returncode == 0:
+            logger.info(f"File copied to FCOS: {target_path}")
+            return True, result.stdout
+        else:
+            logger.error(f"SCP failed: {result.stderr}")
+            return False, result.stderr
+    except Exception as e:
+        logger.error(f"SCP error: {str(e)}")
+        return False, str(e)
+
+
+@app.route("/upload", methods=["POST"])
+def upload_file():
+    if 'file' not in request.files:
+        return "<script>alert('No file selected'); history.back();</script>"
+    
+    file = request.files['file']
+    target_path = request.form.get("target_path", "").strip()
+    
+    if not file.filename or not target_path:
+        return "<script>alert('File or path missing'); history.back();</script>"
+    
+    # ✅ Use original filename
+    filename = secure_filename(file.filename)
+    
+    # If target_path ends with '/', treat it as directory
+    if target_path.endswith("/"):
+        remote_path = target_path + filename
+    else:
+        # Assume target_path includes filename or is a directory
+        if "/" in target_path:
+            remote_path = target_path
+        else:
+            remote_path = f"{target_path}/{filename}"
+    
+    # Save with original name
+    with tempfile.NamedTemporaryFile(suffix=f"_{filename}", delete=False) as tmp:
+        file.save(tmp.name)
+        tmp_path = tmp.name
+    
+    try:
+        # Copy to FCOS
+        success, msg = scp_to_fc(remote_path, tmp_path)
+        if success:
+            logger.info(f"Uploaded {filename} to FCOS: {remote_path}")
+            return f"<script>alert('File uploaded successfully: {filename}'); history.back();</script>"
+        else:
+            return f"<script>alert('Upload failed: {msg[:100]}'); history.back();</script>"
+    finally:
+        os.unlink(tmp_path)  # Clean up temp file
+
 
 if __name__ == "__main__":
     logger.info("Starting Flask app on http://0.0.0.0:5000")

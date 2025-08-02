@@ -20,7 +20,28 @@
       <a href="/" class="btn btn-info text-white">🔄 Refresh</a>
     </div>
 
-    <small class="text-white-50">Tip: Supports <code>services</code>, <code>networks</code>, <code>ports</code>, and
+
+    <!-- File Manager -->
+    <div class="card mb-4">
+      <div class="card-header bg-dark text-white">📁 File Manager (FCOS)</div>
+      <div class="card-body">
+        <p class="text-muted">Upload files directly to your FCOS host.</p>
+        <form method="POST" action="/upload" enctype="multipart/form-data">
+          <div class="mb-3">
+            <label class="form-label">Upload to FCOS Path</label>
+            <input type="text" name="target_path" class="form-control" value="/var/home/core/"
+              placeholder="/home/core/configs/app.yml">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">File</label>
+            <input type="file" name="file" class="form-control" required>
+          </div>
+          <button type="submit" class="btn btn-success">📤 Upload to FCOS</button>
+        </form>
+      </div>
+    </div>
+
+    <small class="text-black-50">Tip: Supports <code>services</code>, <code>networks</code>, <code>ports</code>, and
       <code>volumes</code>.</small>
 
     <!-- Deploy from Compose -->
