@@ -1,0 +1,71 @@
+version: '3.8'
+
+services:
+  # Web Application with environment variables and restart policy
+  webapp:
+    image: nginx:alpine
+    container_name: my-web-server
+    ports:
+      - "8080:80"
+    environment:
+      - SERVER_NAME=my-nginx
+      - ENVIRONMENT=production
+      - DEBUG=false
+    restart: always
+    command: sh -c "echo '<h1>Hello from Nginx!</h1>' > /usr/share/nginx/html/index.html && nginx -g 'daemon off;'"
+    networks:
+      - app-network
+
+  # Database with environment variables
+  db:
+    image: mysql:8.0
+    container_name: my-database
+    environment:
+      MYSQL_ROOT_PASSWORD: securepassword123
+      MYSQL_DATABASE: myapp
+      MYSQL_USER: appuser
+      MYSQL_PASSWORD: apppassword456
+    restart: unless-stopped
+    volumes:
+      - db_data:/var/lib/mysql
+    networks:
+      - app-network
+    ports:
+      - "3306"
+
+  # Cache service
+  redis:
+    image: redis:alpine
+    container_name: my-cache
+    restart: on-failure
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    networks:
+      - app-network
+    ports:
+      - "6379"
+
+  # Monitoring service
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: my-monitoring
+    restart: always
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    networks:
+      - app-network
+
+# Define custom network
+networks:
+  app-network:
+    driver: bridge
+
+# Define persistent volumes
+volumes:
+  db_data:
+    # Database persistent storage
+  redis_data:
+    # Redis persistent storage

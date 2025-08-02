@@ -1,0 +1,180 @@
+<!-- templates/create_container.html -->
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Create Container - DaaS</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    .env-row { margin-bottom: 0.5rem; }
+  </style>
+</head>
+<body class="bg-light">
+  <div class="container mt-4">
+    <h2>➕ Create Container</h2>
+    <form method="POST" class="row g-4">
+      <!-- Name & Image -->
+      <div class="col-md-6">
+        <label class="form-label">Name</label>
+        <input type="text" name="name" class="form-control" required>
+      </div>
+      <div class="col-md-6">
+        <label class="form-label">Image</label>
+        <select name="image" class="form-select" required>
+          {% for img in images %}
+            {% if img.get("RepoTags") %}
+              <option>{{ img.RepoTags[0] }}</option>
+            {% endif %}
+          {% endfor %}
+        </select>
+      </div>
+
+      <!-- Command -->
+      <div class="col-12">
+        <label class="form-label">Command (optional)</label>
+        <input type="text" name="command" class="form-control" placeholder="e.g., sleep 3600">
+      </div>
+
+      <!-- Port Mappings -->
+      <div class="col-12">
+        <label class="form-label">Port Mappings (host:container)</label>
+        <input type="text" name="ports" class="form-control" placeholder="8080:80, 3000:3000">
+        <small class="text-muted">Comma-separated, e.g., <code>8080:80</code></small>
+      </div>
+
+      <!-- Volumes -->
+      <div class="col-12">
+        <label class="form-label">Attach Volumes</label>
+        {% if volumes %}
+          <div id="volume-list">
+            {% for vol in volumes %}
+            <div class="row mb-2">
+              <div class="col-5">
+                <select name="volume_name" class="form-select">
+                  <option value="{{ vol }}">{{ vol }}</option>
+                </select>
+              </div>
+              <div class="col-5">
+                <input type="text" name="volume_path" class="form-control" placeholder="/app">
+              </div>
+              <div class="col-2 d-flex align-items-center">
+                <button type="button" class="btn btn-sm btn-danger remove-row">&times;</button>
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+          <button type="button" class="btn btn-sm btn-secondary" id="add-volume">+ Add Volume</button>
+        {% else %}
+          <p class="text-muted">No volumes available. Create one first.</p>
+        {% endif %}
+      </div>
+
+      <!-- Environment Variables -->
+      <div class="col-12">
+        <label class="form-label">Environment Variables</label>
+        <div id="env-list" class="mb-2">
+          <div class="row env-row">
+            <div class="col-5">
+              <input type="text" name="env_key" class="form-control" placeholder="KEY">
+            </div>
+            <div class="col-5">
+              <input type="text" name="env_value" class="form-control" placeholder="value">
+            </div>
+            <div class="col-2 d-flex align-items-center">
+              <button type="button" class="btn btn-sm btn-danger remove-env">&times;</button>
+            </div>
+          </div>
+        </div>
+        <button type="button" class="btn btn-sm btn-secondary" id="add-env">+ Add Variable</button>
+      </div>
+
+      <!-- Restart Policy -->
+      <div class="col-12">
+        <label class="form-label">Restart Policy</label>
+        <select name="restart_policy" class="form-select">
+          <option value="no">No restart</option>
+          <option value="always">Always</option>
+          <option value="unless-stopped">Unless Stopped</option>
+          <option value="on-failure">On Failure</option>
+        </select>
+        <small class="text-muted">How to restart the container if it stops.</small>
+      </div>
+
+      <!-- Network -->
+      <div class="col-12">
+        <label class="form-label">Network</label>
+        <select name="network" class="form-select">
+          <option value="bridge">Default (bridge)</option>
+          {% for net in networks %}
+            <option value="{{ net }}">{{ net }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <!-- Submit -->
+      <div class="col-12 mt-3">
+        <a href="/" class="btn btn-secondary">Back</a>
+        <button type="submit" class="btn btn-primary">Create Container</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- JavaScript for Dynamic Fields -->
+  <script>
+    // Add Volume
+    document.getElementById("add-volume").addEventListener("click", function () {
+      const list = document.getElementById("volume-list");
+      const row = document.createElement("div");
+      row.className = "row mb-2";
+      row.innerHTML = `
+        <div class="col-5">
+          <select name="volume_name" class="form-select">
+            {% for vol in volumes %}
+              <option value="{{ vol }}">{{ vol }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-5">
+          <input type="text" name="volume_path" class="form-control" placeholder="/app">
+        </div>
+        <div class="col-2 d-flex align-items-center">
+          <button type="button" class="btn btn-sm btn-danger remove-row">&times;</button>
+        </div>
+      `;
+      list.appendChild(row);
+    });
+
+    // Remove Volume
+    document.addEventListener("click", function (e) {
+      if (e.target && e.target.classList.contains("remove-row")) {
+        e.target.closest(".row").remove();
+      }
+    });
+
+    // Add Environment Variable
+    document.getElementById("add-env").addEventListener("click", function () {
+      const list = document.getElementById("env-list");
+      const row = document.createElement("div");
+      row.className = "row env-row mb-2";
+      row.innerHTML = `
+        <div class="col-5">
+          <input type="text" name="env_key" class="form-control" placeholder="KEY">
+        </div>
+        <div class="col-5">
+          <input type="text" name="env_value" class="form-control" placeholder="value">
+        </div>
+        <div class="col-2 d-flex align-items-center">
+          <button type="button" class="btn btn-sm btn-danger remove-env">&times;</button>
+        </div>
+      `;
+      list.appendChild(row);
+    });
+
+    // Remove Environment Variable
+    document.addEventListener("click", function (e) {
+      if (e.target && e.target.classList.contains("remove-env")) {
+        e.target.closest(".env-row").remove();
+      }
+    });
+  </script>
+</body>
+</html>

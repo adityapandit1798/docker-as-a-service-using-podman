@@ -1,0 +1,220 @@
+<!-- templates/index.html -->
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <title>Docker as a Service (DaaS)</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet">
+</head>
+
+<body class="bg-light">
+  <div class="container mt-4">
+    <h1 class="text-center">🐳 Docker as a Service (DaaS)</h1>
+    <p class="text-center text-muted">Full container management UI for Podman API</p>
+
+    <!-- Quick Actions -->
+    <div class="d-flex gap-2 mb-4">
+      <a href="/containers/create" class="btn btn-primary">➕ Create Container</a>
+      <a href="/" class="btn btn-info text-white">🔄 Refresh</a>
+    </div>
+
+    <small class="text-white-50">Tip: Supports <code>services</code>, <code>networks</code>, <code>ports</code>, and
+      <code>volumes</code>.</small>
+
+    <!-- Deploy from Compose -->
+    <div class="card mb-4">
+      <div class="card-header bg-primary text-white">📁 Deploy from Docker Compose</div>
+      <div class="card-body">
+        <p class="text-white-50">Paste your <code>docker-compose.yml</code> to deploy multi-container applications.</p>
+        <form action="/compose/deploy" method="POST">
+          <div class="mb-3">
+            <textarea name="compose_yaml" class="form-control" rows="10" placeholder='version: &quot;3&quot;
+services:
+  web:
+    image: nginx
+    ports:
+      - &quot;8080:80&quot;
+    networks:
+      - mynet
+  redis:
+    image: redis:alpine
+networks:
+  mynet:
+    driver: bridge' required></textarea>
+          </div>
+          <button type="submit" class="btn btn-success">🚀 Deploy Stack</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Images -->
+    <div class="card mb-4">
+      <div class="card-header bg-info text-white">🖼️ Images</div>
+      <div class="card-body">
+        <!-- Pull Image Form -->
+        <form method="POST" action="/images/pull" class="row g-3 mb-3">
+          <div class="col-md-5">
+            <input type="text" name="repo" class="form-control" placeholder="e.g., nginx" required>
+          </div>
+          <div class="col-md-3">
+            <input type="text" name="tag" class="form-control" value="latest">
+          </div>
+          <div class="col-md-2 d-grid">
+            <button type="submit" class="btn btn-success">Pull Image</button>
+          </div>
+        </form>
+
+        <!-- Image List -->
+        {% if images %}
+        <table class="table">
+          <tbody>
+            {% for img in images %}
+            <tr>
+              <td><code>{{ img[1] }}</code></td>
+              <td>{{ "%.1f MB" % img[2] }}</td>
+              <td>
+                <a href="/images/remove/{{ img[0].split(':')[-1] }}" class="btn btn-sm btn-danger"
+                  onclick="return confirm('Delete image?');">🗑️ Remove</a>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <p class="text-center text-muted">No images found. Pull one above!</p>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Volumes -->
+    <div class="card mb-4">
+      <div class="card-header bg-warning text-dark">📁 Volumes</div>
+      <div class="card-body">
+        <form method="POST" action="/volumes/create" class="row g-2 mb-3">
+          <div class="col-8">
+            <input type="text" name="name" class="form-control" placeholder="Volume Name" required>
+          </div>
+          <div class="col-4">
+            <button class="btn btn-success">Create Volume</button>
+          </div>
+        </form>
+        <ul class="list-group">
+          {% for vol in volumes %}
+          <li class="list-group-item d-flex justify-content-between">
+            <strong>{{ vol.Name }}</strong>
+            <a href="/volumes/remove/{{ vol.Name }}" class="btn btn-sm btn-danger"
+              onclick="return confirm('Delete volume?')">🗑️</a>
+          </li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+
+    <!-- Networks -->
+    <div class="card mb-4">
+      <div class="card-header bg-warning text-dark">🌐 Networks</div>
+      <div class="card-body">
+        <form method="POST" action="/networks/create" class="row g-2 mb-3">
+          <div class="col-6">
+            <input type="text" name="name" class="form-control" placeholder="Network Name" required>
+          </div>
+          <div class="col-4">
+            <select name="driver" class="form-select">
+              <option value="bridge">bridge</option>
+            </select>
+          </div>
+          <div class="col-2">
+            <button class="btn btn-success">Create</button>
+          </div>
+        </form>
+        <ul class="list-group">
+          {% for net in networks %}
+          <li class="list-group-item d-flex justify-content-between">
+            <strong>{{ net.Name }}</strong>
+            <a href="/networks/remove/{{ net.Name }}" class="btn btn-sm btn-danger me-1"
+              onclick="return confirm('Delete network?')">🗑️</a>
+          </li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+
+    <!-- Containers -->
+    <div class="card mb-4">
+      <div class="card-header bg-success text-white">📦 Containers ({{ containers|length }})</div>
+      <div class="card-body">
+        {% if containers %}
+        <table class="table table-hover">
+          <thead class="table-light">
+            <tr>
+              <th>ID (Short)</th>
+              <th>Name</th>
+              <th>Image</th>
+              <th>Command</th>
+              <th>Created</th>
+              <th>Ports</th>
+              <th>State</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for c in containers %}
+            <tr>
+              <td title="{{ c.Id }}"><code>{{ c.Id[:12] }}</code></td>
+              <td>{{ c.Names[0] }}</td>
+              <td><small>{{ c.Image }}</small></td>
+              <td><code>{{ c.Command[:40] }}{% if c.Command|length > 40 %}...{% endif %}</code></td>
+              <td>{{ (c.Created * 1000) | timestamp }}</td>
+              <td>
+                {% if c.Ports %}
+                {% for p in c.Ports %}
+                {% if p.PublicPort %}
+                <a href="http://192.168.192.155:{{ p.PublicPort }}" target="_blank" class="text-decoration-none"
+                  title="Open service on port {{ p.PublicPort }}">
+                  <code>{{ p.IP }}:{{ p.PublicPort }}→{{ p.PrivatePort }}/{{ p.Type }}</code>
+                </a><br>
+                {% else %}
+                <span class="text-muted"><code>→{{ p.PrivatePort }}/{{ p.Type }}</code></span><br>
+                {% endif %}
+                {% endfor %}
+                {% else %}
+                <span class="text-muted">None</span>
+                {% endif %}
+              </td>
+              <td><span class="badge bg-{{ 'success' if c.State == 'running' else 'warning' }}">{{ c.State }}</span>
+              </td>
+              <td><small>{{ c.Status }}</small></td>
+              <td>
+                {% if c.State == 'running' %}
+                <a href="/containers/stop/{{ c.Id }}" class="btn btn-sm btn-warning" title="Stop">⏸️</a>
+                {% else %}
+                <a href="/containers/start/{{ c.Id }}" class="btn btn-sm btn-success" title="Start">▶️</a>
+                {% endif %}
+                <a href="/containers/logs/{{ c.Id }}" class="btn btn-sm btn-info" title="Logs">📜</a>
+                <a href="/containers/remove/{{ c.Id }}" class="btn btn-sm btn-danger" title="Remove"
+                  onclick="return confirm('Remove container?');">🗑️</a>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <p class="text-muted">No containers running or stopped.</p>
+        {% endif %}
+      </div>
+    </div>
+
+
+
+  </div>
+
+  <!-- Scripts -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="{{ url_for('static', filename='js/api-client.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+
+</html>

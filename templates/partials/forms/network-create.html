@@ -1,0 +1,14 @@
+<!-- templates/partials/forms/network-create.html -->
+<form method="POST" action="/networks/create" class="row g-2 mb-3">
+  <div class="col-6">
+    <input type="text" name="name" class="form-control" placeholder="Network Name" required>
+  </div>
+  <div class="col-4">
+    <select name="driver" class="form-select">
+      <option value="bridge">bridge</option>
+    </select>
+  </div>
+  <div class="col-2">
+    <button class="btn btn-success">Create</button>
+  </div>
+</form>
