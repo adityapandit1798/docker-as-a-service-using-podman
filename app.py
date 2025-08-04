@@ -608,6 +608,182 @@ def upload_file():
         os.unlink(tmp_path)  # Clean up temp file
 
 
+# @app.route("/images/search")
+# def search_images():
+#     query = request.args.get("q", "").strip()
+#     print(f"🔍 /images/search called with q={query}")  # Debug
+#     if not query:
+#         return {"results": []}
+
+#     try:
+#         url = f"https://hub.docker.com/v2/repositories/library/{query}/"
+#         print(f"📡 GET {url}")  # Debug
+#         response = requests.get(url, timeout=5)
+#         print(f"📥 Status: {response.status_code}, Body: {response.text[:200]}")  # Debug
+
+#         if response.status_code == 200:
+#             data = response.json()
+#             return {
+#                 "results": [{
+#                     "name": data["name"],
+#                     "namespace": data["namespace"],
+#                     "title": data.get("title", ""),
+#                     "description": data.get("description", "No description"),
+#                     "pull_count": data.get("pull_count", 0),
+#                     "star_count": data.get("star_count", 0),
+#                     "is_official": data.get("is_official", False)
+#                 }]
+#             }
+
+#         # Try public repo
+#         url = f"https://hub.docker.com/v2/repositories/{query}/"
+#         print(f"📡 GET {url}")  # Debug
+#         response = requests.get(url, timeout=5)
+#         print(f"📥 Status: {response.status_code}, Body: {response.text[:200]}")  # Debug
+
+#         if response.status_code == 200:
+#             data = response.json()
+#             return {
+#                 "results": [{
+#                     "name": data["name"],
+#                     "namespace": data["namespace"],
+#                     "title": data.get("title", ""),
+#                     "description": data.get("description", "No description"),
+#                     "pull_count": data.get("pull_count", 0),
+#                     "star_count": data.get("star_count", 0),
+#                     "is_official": data.get("is_official", False)
+#                 }]
+#             }
+
+#         return {"results": []}
+#     except Exception as e:
+#         print(f"❌ Search failed: {str(e)}")
+#         import traceback
+#         traceback.print_exc()
+#         return {"results": []}
+
+
+@app.route("/api/docker-hub/search")
+def search_docker_hub():
+    query = request.args.get("q", "").strip()
+    if not query:
+        return {"results": []}
+
+    try:
+        # Fetch search results from Docker Hub
+        url = f"https://hub.docker.com/v2/repositories/library/{query}/"
+        response = requests.get(url, timeout=5)
+        if response.status_code == 200:
+            data = response.json()
+            return {
+                "results": [
+                    {
+                        "name": data["name"],
+                        "namespace": data["namespace"],
+                        "description": data["description"],
+                        "pull_count": data.get("pull_count", 0),
+                        "latest_tag": data.get("tag_latest", {}).get("name", "Unknown"),
+                        "size": data.get("full_size", 0),
+                    }
+                ]
+            }
+
+        # Fallback to public repositories
+        url = f"https://hub.docker.com/v2/repositories/{query}/"
+        response = requests.get(url, timeout=5)
+        if response.status_code == 200:
+            data = response.json()
+            return {
+                "results": [
+                    {
+                        "name": data["name"],
+                        "namespace": data["namespace"],
+                        "description": data["description"],
+                        "pull_count": data.get("pull_count", 0),
+                        "latest_tag": data.get("tag_latest", {}).get("name", "Unknown"),
+                        "size": data.get("full_size", 0),
+                    }
+                ]
+            }
+
+        return {"results": []}
+    except Exception as e:
+        logger.error(f"Error searching Docker Hub: {str(e)}")
+        return {"results": []}
+    
+
+
+@app.route("/api/docker-hub/repo/<image>")
+def proxy_repo_info(image):
+    try:
+        # Try official library first
+        url = f"https://hub.docker.com/v2/repositories/library/{image}/"
+        response = requests.get(url, timeout=5)
+        
+        if response.status_code != 200:
+            # Try public repo
+            url = f"https://hub.docker.com/v2/repositories/{image}/"
+            response = requests.get(url, timeout=5)
+            if response.status_code != 200:
+                return {"found": False}
+
+        data = response.json()
+        
+        return {
+            "found": True,
+            "name": data["name"],
+            "namespace": data["namespace"],
+            "description": data.get("description", ""),
+            "full_description": parse_dockerhub_markdown(data.get("full_description", "")),
+            "pull_count": data.get("pull_count", 0),
+            "star_count": data.get("star_count", 0),
+            "is_official": data.get("is_official", False) or data["namespace"] == "library",
+            "last_updated": data.get("last_updated"),
+            "categories": data.get("categories", []),
+            "storage_size": data.get("storage_size", 0)
+        }
+    except Exception as e:
+        return {"found": False, "error": str(e)}
+
+@app.route("/api/docker-hub/tag/<image>/<tag>")
+def proxy_tag_info(image, tag):
+    try:
+        url = f"https://hub.docker.com/v2/repositories/library/{image}/tags/{tag}/"
+        response = requests.get(url, timeout=5)
+        if response.status_code != 200:
+            url = f"https://hub.docker.com/v2/repositories/{image}/tags/{tag}/"
+            response = requests.get(url, timeout=5)
+            if response.status_code != 200:
+                return {}
+
+        data = response.json()
+        return {
+            "name": data.get("name"),
+            "full_size": data.get("full_size"),
+            "last_updated": data.get("last_updated"),
+            "images": data.get("images", [])
+        }
+    except Exception as e:
+        return {}
+
+def parse_dockerhub_markdown(md):
+    import re
+    sections = {}
+    current = None
+    lines = md.split("\n")
+    
+    for line in lines:
+        match = re.match(r"^# (.+)$", line)
+        if match:
+            current = match.group(1).strip()
+            sections[current] = []
+        elif current and line.strip():
+            sections[current].append(line.strip())
+    
+    return sections
+
+
+
 if __name__ == "__main__":
     logger.info("Starting Flask app on http://0.0.0.0:5000")
     app.run(host="0.0.0.0", port=5000, debug=True)
